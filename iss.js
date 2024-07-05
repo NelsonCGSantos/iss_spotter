@@ -8,7 +8,64 @@ const needle = require("needle");
  *   - An error, if any (nullable)
  *   - The IP address as a string (null if error). Example: "162.245.144.188"
  */
-const fetchISSFlyOverTimes = function(coords, callback) {
+
+const nextISSTimesForMyLocation = function(callback) {
+  fetchMyIP((error, ip) => {
+    if (error) {
+      return callback(error, null);
+    }
+
+    fetchCoordsByIP(ip, (error, loc) => {
+      if (error) {
+        return callback(error, null);
+      }
+
+      fetchISSFlyOverTimes(loc, (error, nextPasses) => {
+        if (error) {
+          return callback(error, null);
+        }
+
+        callback(null, nextPasses);
+      });
+    });
+  });
+};
+
+const fetchMyIP = function(callback) {
+  needle.get("https://api.ipify.org?format=json", (error, response, body) => {
+    if (error) return callback(error, null);
+
+    if (response.statusCode !== 200) {
+      callback(
+        Error(`Status Code ${response.statusCode} when fetching IP: ${body}`),
+        null
+      );
+      return;
+    }
+
+    const ip = body.ip;
+    callback(null, ip);
+  });
+};
+
+const fetchCoordsByIP = function (ip, callback) {
+  needle.get(`http://ipwho.is/${ip}`, (error, response, body) => {
+    if (error) {
+      callback(error, null);
+      return;
+    }
+
+    if (!body.success) {
+      const message = `Success status was ${body.success}. Server message says: ${body.message} when fetching for IP ${body.ip}`;
+      callback(Error(message), null);
+      return;
+    }
+
+    callback(null, { latitude: body.latitude, longitude: body.longitude });
+  });
+};
+
+const fetchISSFlyOverTimes = function (coords, callback) {
   const url = `https://iss-flyover.herokuapp.com/json/?lat=${coords.latitude}&lon=${coords.longitude}`;
 
   needle.get(url, (error, response, body) => {
@@ -31,6 +88,4 @@ const fetchISSFlyOverTimes = function(coords, callback) {
     callback(null, passes);
   });
 };
-
-// Don't need to export the other functions since we are not testing them right now.
-module.exports = { fetchISSFlyOverTimes };
+module.exports = { nextISSTimesForMyLocation };
